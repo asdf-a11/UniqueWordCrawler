@@ -14,6 +14,7 @@ INFO_EVERY = 1 * 60
 BATCH = 100
 NUM_WORKERS = multiprocessing.cpu_count()
 MAX_LINKS = BATCH * NUM_WORKERS + 100
+MAX_PAGES_TO_VISIT = 300_000
 
 class ProgramState():
   def __init__(self):
@@ -26,7 +27,8 @@ class ProgramState():
     rq = m.Queue()
     saveStartTimer = time.time()
     infoStartTimer = time.time()
-    while True:
+    exiting = False
+    while not exiting:
       pList = []
       startTime = time.time()
       for coreId in range(NUM_WORKERS):
@@ -49,8 +51,11 @@ class ProgramState():
           if url not in self.toVisit and url not in self.visited:
             self.toVisit.append(url)
       endTime = time.time()
+      if len(self.visited) >= MAX_PAGES_TO_VISIT:
+        print("Hit Max pages saving and exiting")
+        exiting = True
       #Perodical save self
-      if time.time() - saveStartTimer >= SAVE_EVERY:
+      if time.time() - saveStartTimer >= SAVE_EVERY or exiting:
         saveStartTimer = time.time()
         print("SAVING STATE")
         f = open(PS_SAVE_FILE, "wb")
@@ -58,12 +63,13 @@ class ProgramState():
         f.close()
         #So dont save multiple times in same second
       #Perodically print infomation
-      if time.time() - infoStartTimer >= INFO_EVERY:
+      if time.time() - infoStartTimer >= INFO_EVERY or exiting:
         infoStartTimer = time.time()
         print("\n--INFO--")
         print("toVisit,",len(self.toVisit), "visited",len(self.visited), "wcLength", len(self.wordCounter),
         "least common", self.wordCounter.most_common()[:-5-1:-1], "most common", self.wordCounter.most_common(5))
         print("Time per batch", endTime - startTime, " Untill next save ", SAVE_EVERY - (time.time() - saveStartTimer))
+      
   def Worker(self,rq, coreId, linkList):
     def is_valid_link(href):
       if not href:
